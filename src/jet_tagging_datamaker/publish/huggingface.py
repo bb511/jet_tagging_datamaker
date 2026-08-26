@@ -17,7 +17,6 @@ SHARD_BYTES = 500 * 1024**2
 
 SPLITS = ("train", "validation", "test")
 
-# One table, so one config. The name is what load_dataset falls back to.
 CONFIG = "default"
 
 # HuggingFace reads this block and nothing else to file the page. It takes the licence

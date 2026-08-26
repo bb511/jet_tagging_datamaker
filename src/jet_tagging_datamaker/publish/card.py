@@ -11,7 +11,7 @@ import numpy as np
 from jet_tagging_datamaker.publish import export
 
 # The mirror the card's examples load from.
-REPO_ID = "podagiu/hls4ml_lhc_jets_150p"
+REPO_ID = "fastmachinelearning/hls4ml_lhc_jets_150p"
 
 ZENODO_DOI = "10.5281/zenodo.3602260"
 
@@ -47,11 +47,14 @@ Licence: https://creativecommons.org/licenses/by/4.0/
 
 CARD_HF = """# hls4ml LHC jet dataset (150 particles)
 
-*A mirror of the Zenodo record [{doi}](https://doi.org/{doi}), reshaped as one row per jet.*
+*A mirror of the Zenodo record [{doi}](https://doi.org/{doi}), reshaped to one row per jet.*
 
-The data are simulated high transverse-momentum jets from proton-proton collisions at the Large Hadron Collider, labelled by what produced them: a light quark, a gluon, a W boson, a Z boson or a top quark. Each jet carries up to 150 constituents together with a set of jet-level observables, and the set was prepared for the hls4ml jet-tagging studies. The mirror holds {total:,} jets.
+The data are simulated high transverse-momentum (~1 TeV) jets from proton-proton collisions at the Large Hadron Collider, labelled by what produced them: a light quark, a gluon, a W boson, a Z boson or a top quark.
+Each jet is constituted of up to 150 constituents together with a set of jet-level observables, and the set was prepared for the hls4ml jet-tagging studies.
+The mirror holds {total:,} jets.
 
-Nothing was recomputed. Every value is the value the original HDF5 files hold; the padded `(jets, 150, {n_constituent})` block was rewritten as one variable-length list per feature, and the jet images the same files carry are not mirrored.
+Every value is the value of the original HDF5 files.
+The jet images from the original data files are dropped.
 
 ## One row is one jet
 
@@ -64,22 +67,20 @@ Nothing was recomputed. Every value is the value the original HDF5 files hold; t
 | `source_row` | `int32` | the jet's row within that file |
 
 The constituent features, in the order the original files list them, are {constituent_columns}.
-
 The jet-level features are {jet_columns}.
-
-The label is the argmax over the five one-hot columns `j_g`, `j_q`, `j_w`, `j_z`, `j_t` that the original `jets` array ends with. Those columns, and the always-zero `j_undef` beside them, are not mirrored: `label` replaces them.
+The label is the argmax over the five one-hot columns `j_g`, `j_q`, `j_w`, `j_z`, `j_t` that the original `jets` array ends with.
+The one-hot columns and the always-zero `j_undef` beside them are not mirrored, but are replaced by `label`.
 
 ## Splits
 
-The record ships pre-split, drawn the way the reference pipeline draws it, so a model trained from the mirror sees the same jets as one trained from the HDF5 files.
-
-`train` and `validation` come from the Zenodo *train* archive. Its files are concatenated in sorted-filename order and cut with
+`train` and `validation` come from the Zenodo *train* archive.
+Its files are concatenated in sorted-filename order and cut with
 
 ```python
 train_idx, validation_idx = train_test_split(np.arange(n), test_size=0.2, random_state=42)
 ```
 
-Rows are stored in the order those two index arrays come back in, which is the row order of the arrays the reference pipeline caches, so anything that pipeline does by row position, such as its k-fold split, applies to the mirror unchanged. `test` is the Zenodo *val* archive, in sorted-filename order, untouched.
+`test` is the Zenodo *val* archive, in sorted-filename order.
 
 | split | jets | {class_header} |
 |---|---|{class_rule}
@@ -98,7 +99,7 @@ requirements.txt   what that pipeline needs
 
 ## Loading
 
-The tables need nothing but `datasets`:
+The tables need only the `datasets` package:
 
 ```python
 from datasets import load_dataset
@@ -106,7 +107,8 @@ jets = load_dataset("{repo}", split="train")
 jets[0]["j1_pt"]    # the transverse momenta of that jet's constituents
 ```
 
-The record also ships the pipeline the jet-tagging studies run on this data. It reads the shards, keeps the leading constituents by transverse momentum, normalises each feature by a scale fitted on the training split alone, caches the result as `.npy`, and hands back torch tensors:
+This data record also contains a data processing pipeline that implements a few basic recommended processing steps.
+It reads the parquet files, keeps the leading constituents by transverse momentum, normalises each feature by a scale fitted on the training split alone, caches the result as `.npy`, and hands back torch tensors:
 
 ```python
 import sys
@@ -122,23 +124,39 @@ data.prepare()
 train = data.load("train")
 ```
 
-`train.x` is then a `(jets, 32, {n_constituent})` float32 tensor of normalised constituents and `train.y` a `(jets, {n_classes})` float32 one-hot tensor of the labels. `data.load("validation")` and `data.load("test")` give the other two splits, normalised with the scales fitted on `train`.
+The `train.x` object is a `(jets, 32, {n_constituent})` float32 tensor of normalised constituents and `train.y` a `(jets, {n_classes})` float32 one-hot tensor of the labels.
+The `data.load("validation")` and the `data.load("test")` objects return the other two splits, normalised with the scales fitted on `train`.
+The `data.nconstituents` is used to set the maximum number of constituents per jet; `0` or less keeps all 150.
+Again, these are ordered by descending transverse momentum by the data loader.
+Data that is processed in different ways using the record's dataloader are cached on disk in different ways; hence, there's no duplicate preprocessing.
 
-`data.nconstituents` sets how many constituents per jet survive; `0` or less keeps all 150. Each setting caches into its own folder, so switching between them costs one pass rather than a rebuild.
-
-`prepare` writes those caches under `./cache`, which the `HLS4ML_JETS_CACHE` environment variable moves elsewhere, and reads the shards from `HLS4ML_JETS_ROOT` when the overrides above are left out. Allow the cache a few times the record's size on disk. The pipeline needs python 3.11 or newer with `numpy`, `pyarrow`, `torch`, `omegaconf` and `hydra-core`, which `pip install -r requirements.txt` at the record's root installs. **If you only want the raw tables, you need none of that. Call `load_dataset`.**
+The `prepare` method writes the caches under the `./cache` folder.
+Please set the `HLS4ML_JETS_CACHE` environment to move this elsewhere.
+Additionally, `prepare` reads the shards from `HLS4ML_JETS_ROOT` when the overrides above are left out.
+Allow the cache a few times the record's size on disk.
+The pipeline needs python 3.11 or newer with `numpy`, `pyarrow`, `torch`, `omegaconf` and `hydra-core`, which `pip install -r requirements.txt` at the record's root installs.
+**If you only want the raw tables, you need none of the dataloader functionality. Just call `load_dataset`.**
 
 ## Caveats
 
-**Constituents are stored in the order they sit in the original files, which is not sorted by transverse momentum.** The shipped pipeline stable-sorts each jet by descending `j1_pt` before it truncates to `nconstituents` or pads up to it, so the constituents it keeps are the leading ones whatever order they arrived in. Code that truncates the lists as they come will keep a different set.
+**Constituents are stored in descending transverse momentum, the order they sit in the original files.**
+Every jet of all three splits was checked: no list holds a constituent with a higher `j1_pt` than the one before it.
+The loader in this record still stable-sorts each jet by descending `j1_pt` before it truncates to `nconstituents` or pads up to it, because the reference pipeline does.
+The sort of the dataloader acts as a double-check that constiutents are stored in descending order.
+Truncating the lists as they come therefore keeps the same leading constituents.
 
-**The lists have no padding and no fixed length.** A jet holds as many entries as it has constituents, up to 150. The original files pad every jet to 150 slots with rows of zeros; those slots are dropped here and rebuilt by the loader.
+**The lists have no padding or fixed length.**
+A jet holds as many entries as it has constituents, up to 150.
+The original files pad every jet to 150 slots with rows of zeros; those slots are dropped here and rebuilt by the loader.
 
-**The jet images are not mirrored.** The original files carry `jetImage`, `jetImageECAL` and `jetImageHCAL`, three 100x100 arrays per jet, which dwarf everything else. Take them from Zenodo if you need them.
+**The jet images are not mirrored.**
+The original files carry `jetImage`, `jetImageECAL` and `jetImageHCAL`, three 100x100 arrays per jet, which dwarf everything else.
+Take them from Zenodo if you need them.
 
 ## Provenance
 
-Simulated proton-proton collisions at the LHC, produced for the hls4ml jet-tagging studies and published on Zenodo in 2020 by Maurizio Pierini, Javier Duarte, Nhan Tran and Marat Freytsis. This mirror was built from the two archives of that record, `hls4ml_LHCjet_150p_train.tar.gz` and `hls4ml_LHCjet_150p_val.tar.gz`, by the code at https://github.com/bb511/jet_tagging_datamaker.
+Simulated proton-proton collisions at the LHC, produced for the hls4ml jet-tagging studies and published on Zenodo in 2020 by Maurizio Pierini, Javier Duarte, Nhan Tran and Marat Freytsis.
+This mirror was built from the two archives of that record, `hls4ml_LHCjet_150p_train.tar.gz` and `hls4ml_LHCjet_150p_val.tar.gz`, by the code at https://github.com/bb511/jet_tagging_datamaker.
 
 ## Citation
 
@@ -157,7 +175,9 @@ Cite the Zenodo record this dataset mirrors.
 
 ## Licence
 
-CC BY 4.0, the licence of the original record. See `LICENSE`. Use it for anything, including commercially, as long as you credit Pierini, Duarte, Tran and Freytsis, link the licence at https://creativecommons.org/licenses/by/4.0/, and say what you changed. What changed here is the shape, not the values.
+CC BY 4.0, the licence of the original record.
+See `LICENSE`.
+Use it for anything, including commercially, as long as you credit Pierini, Duarte, Tran and Freytsis, link the licence at https://creativecommons.org/licenses/by/4.0/, and say what you changed.
 
 ## Contact
 
