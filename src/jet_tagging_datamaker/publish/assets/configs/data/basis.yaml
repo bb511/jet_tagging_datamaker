@@ -1,0 +1,40 @@
+# @package data
+
+# The configuration the published studies were run with: the 32 leading constituents by
+# pT of each jet, five flavour classes (g, q, W, Z, t).
+
+defaults:
+  - /paths: default
+  - _self_
+
+_target_: loader.datamodule.JetData
+_convert_: all
+
+# Where the record is read from and where its caches are built.
+data_dir: ${paths.raw_data_dir}
+cache_root_dir: ${paths.base_data_dir}
+
+# 0 or less keeps every slot, up to max_constituents.
+nconstituents: 32
+max_constituents: 150
+n_classes: 5
+
+# The 16 constituent columns, in the order the h5 files carry them. The order is what
+# fixes the last axis of the tensors, so it must not be rearranged here.
+constituent_features:
+  - j1_px
+  - j1_py
+  - j1_pz
+  - j1_e
+  - j1_erel
+  - j1_pt
+  - j1_ptrel
+  - j1_eta
+  - j1_etarel
+  - j1_etarot
+  - j1_phi
+  - j1_phirel
+  - j1_phirot
+  - j1_deltaR
+  - j1_costheta
+  - j1_costhetarel

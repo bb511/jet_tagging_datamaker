@@ -1,0 +1,21 @@
+# @package _global_
+
+# Root of the configuration tree that ships with the record.
+#
+#   import sys
+#   from hydra import compose, initialize_config_dir
+#   from hydra.utils import instantiate
+#
+#   sys.path.insert(0, record)   # the _target_ below names loader.*, so it has to import
+#   with initialize_config_dir(config_dir=f"{record}/configs", version_base=None):
+#       cfg = compose("config", overrides=[f"paths.root_dir={record}"])
+#   data = instantiate(cfg.data)
+#   data.prepare()
+#   train = data.load("train")
+#
+# basis is the configuration the published studies were run with. Change any single
+# setting with, say, data.nconstituents=8.
+
+defaults:
+  - _self_
+  - data: basis

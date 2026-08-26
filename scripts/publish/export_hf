@@ -1,0 +1,66 @@
+#!/usr/bin/env python
+
+# Build the HuggingFace mirror of the hls4ml LHC jet dataset.
+# Run this from the root of the repository. It downloads about 3.9 GB from Zenodo the
+# first time and writes about 3 GB of parquet.
+import argparse
+from pathlib import Path
+
+from jet_tagging_datamaker.publish import export, huggingface
+
+parser = argparse.ArgumentParser(
+    description="Mirror the Zenodo record as one row per jet.",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    '--raw',
+    type=Path,
+    default=Path("/data/deodagiu/hls4ml_jets_data/raw"),
+    help="Where the archives are downloaded and unpacked into train/ and val/.",
+)
+parser.add_argument(
+    '--out',
+    type=Path,
+    default=Path("/data/deodagiu/hls4ml_jets_data/hf"),
+    help="Folder the mirror is written into.",
+)
+parser.add_argument(
+    '--skip-download',
+    action='store_true',
+    help="Take the h5 files under --raw as they are, without checking Zenodo.",
+)
+parser.add_argument(
+    '--card-only',
+    action='store_true',
+    help="Rewrite the card and the assets over the shards already in --out.",
+)
+args = parser.parse_args()
+
+
+def written_from(out: Path) -> dict:
+    """build()'s return value, rebuilt from the shards a previous run left."""
+    found = {path.name.split("-")[0] for path in (out / "data").glob("*.parquet")}
+
+    return {
+        huggingface.CONFIG: {
+            split: f"data/{split}-*.parquet"
+            for split in huggingface.SPLITS
+            if split in found
+        }
+    }
+
+
+args.out.mkdir(parents=True, exist_ok=True)
+if args.card_only:
+    written = written_from(args.out)
+else:
+    if not args.skip_download:
+        export.fetch(args.raw)
+    written = huggingface.build(args.raw, args.out)
+
+huggingface.finish(args.out, written, huggingface.shard_names(args.out))
+
+print(f"  mirror written to {args.out}")
+for split, info in huggingface.split_counts(args.out).items():
+    labels = " ".join(f"{k}:{v:,}" for k, v in sorted(info["labels"].items()))
+    print(f"  {split:11s} {info['rows']:>9,} rows  {labels}")
