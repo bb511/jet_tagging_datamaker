@@ -13,6 +13,9 @@ from jet_tagging_datamaker.publish import export
 # The mirror the card's examples load from.
 REPO_ID = "fastmachinelearning/hls4ml_lhc_jets_150p"
 
+# The datamaker commit that produced the shards. Stamp it before every export.
+BUILT_AT_COMMIT = "1718726"
+
 ZENODO_DOI = "10.5281/zenodo.3602260"
 
 # Width the card's prose is reflowed to, so a reader opening the raw markdown sees lines
@@ -157,6 +160,7 @@ Take them from Zenodo if you need them.
 
 Simulated proton-proton collisions at the LHC, produced for the hls4ml jet-tagging studies and published on Zenodo in 2020 by Maurizio Pierini, Javier Duarte, Nhan Tran and Marat Freytsis.
 This mirror was built from the two archives of that record, `hls4ml_LHCjet_150p_train.tar.gz` and `hls4ml_LHCjet_150p_val.tar.gz`, by the code at https://github.com/bb511/jet_tagging_datamaker.
+The data were produced at commit [`{built_at_commit}`](https://github.com/bb511/jet_tagging_datamaker/tree/{built_at_commit}) of that repository.
 
 ## Citation
 
@@ -190,6 +194,7 @@ def render(counts: dict, particle_names: list[str], jet_names: list[str]) -> str
     return _rewrap(
         CARD_HF.format(
             repo=REPO_ID,
+            built_at_commit=BUILT_AT_COMMIT,
             doi=ZENODO_DOI,
             total=sum(split["rows"] for split in counts.values()),
             n_constituent=len(particle_names),
