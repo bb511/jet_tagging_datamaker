@@ -14,7 +14,7 @@ from jet_tagging_datamaker.publish import export
 REPO_ID = "fastmachinelearning/hls4ml_lhc_jets_150p"
 
 # The datamaker commit that produced the shards. Stamp it before every export.
-BUILT_AT_COMMIT = "1718726"
+BUILT_AT_COMMIT = "6ab2f90"
 
 ZENODO_DOI = "10.5281/zenodo.3602260"
 
