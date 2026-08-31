@@ -2,6 +2,8 @@
 
 import re
 
+import pyarrow.parquet as pq
+
 import pytest
 from conftest import CONSTITUENT_NAMES, JET_NAMES, LABEL_NAMES
 
@@ -34,6 +36,15 @@ def test_build_writes_one_shard_per_split_and_returns_its_pattern(raw_dir, tmp_p
     }
     for split in huggingface.SPLITS:
         assert (out / "data" / f"{split}-00000-of-00001.parquet").exists()
+
+
+def test_shards_carry_small_row_groups_and_a_page_index(mirror):
+    shard = next((mirror[0] / "data").glob("train-*.parquet"))
+    metadata = pq.read_metadata(shard)
+    groups = [metadata.row_group(i) for i in range(metadata.num_row_groups)]
+    assert all(group.num_rows <= huggingface.ROW_GROUP_ROWS for group in groups)
+    assert groups[0].column(0).has_offset_index
+    assert "RLE_DICTIONARY" not in groups[0].column(0).encodings
 
 
 def test_split_rows_add_up_to_the_archives(raw_dir, tmp_path):

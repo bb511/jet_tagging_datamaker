@@ -15,6 +15,11 @@ from jet_tagging_datamaker.publish import card, export
 
 SHARD_BYTES = 500 * 1024**2
 
+# The dataset viewer reads whole row groups, so one group per shard (what pyarrow
+# defaults to at these row counts) puts ~540 MB behind its 300 MB scan limit and
+# blanks the preview; the page index lets it seek without reading a group at all.
+ROW_GROUP_ROWS = 10_000
+
 SPLITS = ("train", "validation", "test")
 
 CONFIG = "default"
@@ -86,6 +91,11 @@ def write_shards(table: pa.Table, out_dir: Path, split: str) -> int:
             chunk,
             out_dir / f"{split}-{index:05d}-of-{len(chunks):05d}.parquet",
             compression="snappy",
+            # Dictionary-encoding near-unique floats loses ~25 % once every row
+            # group restarts its dictionary; only the file-name column repeats.
+            use_dictionary=["source_file"],
+            row_group_size=ROW_GROUP_ROWS,
+            write_page_index=True,
         )
 
     return len(chunks)
